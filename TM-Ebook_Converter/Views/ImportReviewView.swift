@@ -7,10 +7,16 @@ struct ImportReviewView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            table
-            templateEditor
+            actionBar
             Divider()
-            footer
+            ScrollView {
+                VStack(spacing: 14) {
+                    table
+                        .frame(minHeight: 180, idealHeight: 220, maxHeight: 260)
+                    templateEditor
+                }
+                .padding(.vertical, 12)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -163,7 +169,7 @@ struct ImportReviewView: View {
         .background(Color(nsColor: .windowBackgroundColor).opacity(0.65))
     }
 
-    private var footer: some View {
+    private var actionBar: some View {
         HStack(spacing: 12) {
             let selected = appModel.importCandidates.filter { $0.isSelected && !$0.audioFiles.isEmpty }
             let selectedBytes = selected.map(\.totalBytes).reduce(0, +)
@@ -201,7 +207,9 @@ struct ImportReviewView: View {
             .buttonStyle(.borderedProminent)
             .disabled(selected.isEmpty)
         }
-        .padding()
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(.bar)
     }
 
     private func icon(for kind: ImportCandidate.Kind) -> String {
@@ -286,30 +294,34 @@ private struct ImportChapterTemplateCard: View {
                         auditionControls
                         ImportScrubTimeline(candidate: candidate, audition: audition)
 
-                        VStack(spacing: 6) {
-                            ForEach(candidate.chapterDrafts) { draft in
-                                ChapterDraftRow(
-                                    candidateID: candidate.id,
-                                    draft: draft,
-                                    play: {
-                                        play(from: draft)
-                                    },
-                                    playTransition: {
-                                        playTransition(after: draft)
-                                    },
-                                    setFromPlayhead: {
-                                        let playhead = audition.currentTime
-                                        appModel.updateChapterDraft(
-                                            candidateID: candidate.id,
-                                            draftID: draft.id,
-                                            startTime: playhead
-                                        )
-                                        return playhead
-                                    },
-                                    hasNextDraft: hasNextDraft(after: draft)
-                                )
+                        ScrollView {
+                            LazyVStack(spacing: 6) {
+                                ForEach(candidate.chapterDrafts) { draft in
+                                    ChapterDraftRow(
+                                        candidateID: candidate.id,
+                                        draft: draft,
+                                        play: {
+                                            play(from: draft)
+                                        },
+                                        playTransition: {
+                                            playTransition(after: draft)
+                                        },
+                                        setFromPlayhead: {
+                                            let playhead = audition.currentTime
+                                            appModel.updateChapterDraft(
+                                                candidateID: candidate.id,
+                                                draftID: draft.id,
+                                                startTime: playhead
+                                            )
+                                            return playhead
+                                        },
+                                        hasNextDraft: hasNextDraft(after: draft)
+                                    )
+                                }
                             }
+                            .padding(.trailing, 4)
                         }
+                        .frame(minHeight: 160, maxHeight: 360)
                     }
 
                     HStack {
@@ -336,7 +348,7 @@ private struct ImportChapterTemplateCard: View {
             }
         }
         .padding(12)
-        .frame(width: 850, alignment: .topLeading)
+        .frame(width: 880, alignment: .topLeading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
@@ -579,9 +591,6 @@ private struct ImportScrubTimeline: View {
         }
         .padding(10)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .onChange(of: audition.currentTime) { _, value in
-            jumpTimeText = DurationFormatter.positional(value)
-        }
         .task(id: candidate.audioFiles.first) {
             guard let url = candidate.audioFiles.first else { return }
             let samples = try? await Task.detached(priority: .utility) {
@@ -828,7 +837,8 @@ private struct ChapterDraftRow: View {
             .help("Play into the next section")
 
             Button {
-                timeText = DurationFormatter.positional(setFromPlayhead())
+                let playhead = setFromPlayhead()
+                timeText = DurationFormatter.positional(playhead)
             } label: {
                 Label("Mark", systemImage: "waveform.and.magnifyingglass")
             }
@@ -854,7 +864,15 @@ private struct ChapterDraftRow: View {
             .buttonStyle(.borderless)
             .help("Remove section")
         }
-        .onChange(of: title) { _, _ in commit() }
+        .onChange(of: draft.title) { _, value in
+            guard value != title else { return }
+            title = value
+        }
+        .onChange(of: draft.startTime) { _, value in
+            let formatted = DurationFormatter.positional(value)
+            guard formatted != timeText else { return }
+            timeText = formatted
+        }
     }
 
     private func commit() {
