@@ -102,6 +102,7 @@
 				A058778F2FB8007D00CA5D96 /* Sources */,
 				A05877902FB8007D00CA5D96 /* Frameworks */,
 				A05877912FB8007D00CA5D96 /* Resources */,
+				B4F001002FB93A0000010001 /* Copy FFmpeg Tools */,
 			);
 			buildRules = (
 			);
@@ -230,6 +231,32 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		B4F001002FB93A0000010001 /* Copy FFmpeg Tools */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/TM-Ebook_Converter/Resources/Tools/ffmpeg",
+				"$(SRCROOT)/TM-Ebook_Converter/Resources/Tools/ffprobe",
+			);
+			name = "Copy FFmpeg Tools";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/ffmpeg",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/ffprobe",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\nTOOLS_SRC=\"$SRCROOT/TM_Ebook_Converter/Resources/Tools\"\nif [ ! -d \"$TOOLS_SRC\" ]; then\n  TOOLS_SRC=\"$SRCROOT/TM-Ebook_Converter/Resources/Tools\"\nfi\nTOOLS_DST=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Tools\"\nmkdir -p \"$TOOLS_DST\"\nfor tool in ffmpeg ffprobe; do\n  source_path=\"\"\n  if [ -x \"$TOOLS_SRC/$tool\" ]; then\n    source_path=\"$TOOLS_SRC/$tool\"\n  elif command -v \"$tool\" >/dev/null 2>&1; then\n    source_path=\"$(command -v \"$tool\")\"\n  elif [ -x \"/opt/homebrew/bin/$tool\" ]; then\n    source_path=\"/opt/homebrew/bin/$tool\"\n  elif [ -x \"/usr/local/bin/$tool\" ]; then\n    source_path=\"/usr/local/bin/$tool\"\n  else\n    echo \"error: Missing $tool. Install with: brew install ffmpeg\" >&2\n    exit 1\n  fi\n  cp -fL \"$source_path\" \"$TOOLS_DST/$tool\"\n  chmod 755 \"$TOOLS_DST/$tool\"\ndone\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A058778F2FB8007D00CA5D96 /* Sources */ = {
