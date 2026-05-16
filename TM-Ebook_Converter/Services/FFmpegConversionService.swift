@@ -4,6 +4,7 @@ enum ConversionError: LocalizedError {
     case missingTool(String)
     case probeFailed(String, String)
     case conversionFailed(String)
+    case invalidInput(String)
     case noChapters
     case outputNotSet
 
@@ -12,6 +13,7 @@ enum ConversionError: LocalizedError {
         case .missingTool(let tool): return "\(tool) was not found. Install it with Homebrew or bundle it in the app resources."
         case .probeFailed(let file, let output): return "Could not read duration for \(file). \(output)"
         case .conversionFailed(let output): return output
+        case .invalidInput(let message): return message
         case .noChapters: return "Add at least one audio chapter before converting."
         case .outputNotSet: return "Choose an output folder or file."
         }
@@ -26,6 +28,7 @@ actor FFmpegConversionService {
         guard let ffmpeg = FFmpegToolLocator.ffmpegURL() else { throw ConversionError.missingTool("ffmpeg") }
 
         let outputURL = try resolvedOutputURL(for: project)
+        try validateInputs(project: project, outputURL: outputURL)
         let workDir = FileManager.default.temporaryDirectory.appendingPathComponent("M4BForge-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: workDir) }
@@ -107,6 +110,48 @@ actor FFmpegConversionService {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let fileName = cleanTitle + ".m4b"
         return folder.appendingPathComponent(fileName)
+    }
+
+    private func validateInputs(project: AudiobookProject, outputURL: URL) throws {
+        for chapter in project.chapters {
+            try validateReadableFile(chapter.sourceURL, label: "Audio source")
+        }
+
+        if let singleSourceURL = project.singleSourceURL {
+            try validateReadableFile(singleSourceURL, label: "Single source")
+        }
+
+        if let coverArtURL = project.coverArtURL {
+            try validateReadableFile(coverArtURL, label: "Cover art")
+        }
+
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: outputURL.path, isDirectory: &isDirectory), isDirectory.boolValue {
+            throw ConversionError.invalidInput("Output path is a folder, not a file: \(outputURL.path)")
+        }
+
+        let outputFolder = outputURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: outputFolder, withIntermediateDirectories: true)
+        let probeURL = outputFolder.appendingPathComponent(".m4b-forge-write-test-\(UUID().uuidString)")
+        do {
+            try Data().write(to: probeURL, options: .atomic)
+            try? FileManager.default.removeItem(at: probeURL)
+        } catch {
+            throw ConversionError.invalidInput("Cannot write to export folder \(outputFolder.path): \(error.localizedDescription)")
+        }
+    }
+
+    private func validateReadableFile(_ url: URL, label: String) throws {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            throw ConversionError.invalidInput("\(label) does not exist: \(url.path)")
+        }
+        guard !isDirectory.boolValue else {
+            throw ConversionError.invalidInput("\(label) is a folder, not a file: \(url.path)")
+        }
+        guard FileManager.default.isReadableFile(atPath: url.path) else {
+            throw ConversionError.invalidInput("\(label) is not readable by M4B Forge: \(url.path)")
+        }
     }
 
     private func makeConcatFile(_ chapters: [Chapter], at url: URL) throws {
