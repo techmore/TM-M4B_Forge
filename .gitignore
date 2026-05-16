@@ -12,3 +12,14 @@ TM-Ebook_Converter/Resources/Tools/ffprobe
 # SwiftPM/Xcode scratch
 .swiftpm/
 Package.resolved
+
+# Optional chapter automation pipeline scratch/output
+ChapterPipeline/.venv/
+chapter_work/
+*.chapters.json
+*.chapters.csv
+*.chapters.txt
+*.raw.txt
+*.prompt.txt
+*.error.txt
+*.whisper.json
