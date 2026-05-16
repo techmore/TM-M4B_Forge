@@ -43,6 +43,7 @@ final class AppViewModel: ObservableObject {
         panel.allowsMultipleSelection = true
         panel.prompt = "Import"
         if panel.runModal() == .OK {
+            logAccess(SecurityScopedBookmarkStore.startAccessing(panel.urls))
             SecurityScopedBookmarkStore.persistAccess(for: panel.urls)
             prepareImportReview(panel.urls)
         }
@@ -56,6 +57,7 @@ final class AppViewModel: ObservableObject {
         panel.allowedContentTypes = [.audio, .mpeg4Audio, UTType(filenameExtension: "mp3") ?? .audio]
         panel.prompt = "Import"
         if panel.runModal() == .OK {
+            logAccess(SecurityScopedBookmarkStore.startAccessing(panel.urls))
             SecurityScopedBookmarkStore.persistAccess(for: panel.urls)
             prepareImportReview(panel.urls)
         }
@@ -69,12 +71,14 @@ final class AppViewModel: ObservableObject {
         panel.allowedContentTypes = [.audio, .mpeg4Audio, UTType(filenameExtension: "mp3") ?? .audio]
         panel.prompt = "Chapter"
         if panel.runModal() == .OK, let url = panel.url {
+            logAccess(SecurityScopedBookmarkStore.startAccessing(url))
             SecurityScopedBookmarkStore.persistAccess(for: [url])
             Task { await importSingleFile(url) }
         }
     }
 
     func prepareImportReview(_ urls: [URL]) {
+        logAccess(SecurityScopedBookmarkStore.startAccessing(urls))
         SecurityScopedBookmarkStore.persistAccess(for: urls)
         isImporting = true
         Task.detached(priority: .userInitiated) { [urls] in
@@ -146,6 +150,7 @@ final class AppViewModel: ObservableObject {
         panel.allowsMultipleSelection = false
         panel.prompt = "Choose Cover"
         if panel.runModal() == .OK, let url = panel.url {
+            logAccess(SecurityScopedBookmarkStore.startAccessing(url))
             SecurityScopedBookmarkStore.persistAccess(for: [url])
             setCoverArt(url, for: id)
         }
@@ -373,6 +378,8 @@ final class AppViewModel: ObservableObject {
         panel.prompt = "Import Chapters"
         if panel.runModal() == .OK, let url = panel.url {
             do {
+                logAccess(SecurityScopedBookmarkStore.startAccessing(url))
+                SecurityScopedBookmarkStore.persistAccess(for: [url])
                 let drafts = try ChapterFileParser.parse(url: url)
                 updateSelectedProject { project in
                     applyChapterDrafts(drafts, to: &project)
@@ -433,6 +440,7 @@ final class AppViewModel: ObservableObject {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
             if panel.runModal() == .OK, let url = panel.url {
+                logAccess(SecurityScopedBookmarkStore.startAccessing(url))
                 SecurityScopedBookmarkStore.persistAccess(for: [url])
                 updateSelectedProject { $0.coverArtURL = url }
             }
@@ -443,6 +451,7 @@ final class AppViewModel: ObservableObject {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         if panel.runModal() == .OK, let url = panel.url {
+            logAccess(SecurityScopedBookmarkStore.startAccessing(url))
             SecurityScopedBookmarkStore.persistAccess(for: [url])
             updateSelectedProject { $0.settings.outputFolderURL = url }
         }
@@ -473,6 +482,7 @@ final class AppViewModel: ObservableObject {
         }
 
         SecurityScopedBookmarkStore.persistAccess(for: [url])
+        logAccess(SecurityScopedBookmarkStore.startAccessing(url))
         defaults.outputFolderURL = url
         appendLog("Export folder set to \(url.path).")
         return true
@@ -511,6 +521,7 @@ final class AppViewModel: ObservableObject {
 
         let project = jobs[index].project
         let jobID = jobs[index].id
+        logAccess(SecurityScopedBookmarkStore.startAccessing(projectAccessRoots(for: project)))
         SecurityScopedBookmarkStore.persistAccess(for: project)
         SecurityScopedBookmarkStore.restoreAccess(for: project)
         appendLog("Starting \(project.displayTitle): \(project.chapters.count) chapters, \(DurationFormatter.positional(project.timelineDuration)).")
@@ -579,6 +590,7 @@ final class AppViewModel: ObservableObject {
         panel.nameFieldStringValue = "\(project.displayTitle).m4bforge"
         if panel.runModal() == .OK, let url = panel.url {
             do {
+                logAccess(SecurityScopedBookmarkStore.startAccessing(projectAccessRoots(for: project)))
                 SecurityScopedBookmarkStore.persistAccess(for: project)
                 let data = try JSONEncoder.pretty.encode(project)
                 try data.write(to: url)
@@ -666,6 +678,8 @@ final class AppViewModel: ObservableObject {
 
     private func loadProject(from url: URL) {
         do {
+            logAccess(SecurityScopedBookmarkStore.startAccessing(url))
+            SecurityScopedBookmarkStore.persistAccess(for: [url])
             let data = try Data(contentsOf: url)
             var project = try JSONDecoder().decode(AudiobookProject.self, from: data)
             project.id = UUID()
@@ -797,6 +811,41 @@ final class AppViewModel: ObservableObject {
 
     private func appendLog(_ message: String) {
         logMessages.append("[\(Date().formatted(date: .omitted, time: .standard))] \(message)")
+    }
+
+    private func logAccess(_ messages: [String]) {
+        for message in messages {
+            appendLog(message)
+        }
+    }
+
+    private func logAccess(_ message: String?) {
+        guard let message else { return }
+        appendLog(message)
+    }
+
+    private func projectAccessRoots(for project: AudiobookProject) -> [URL] {
+        var urls: [URL] = []
+        if let sourceFolderURL = project.sourceFolderURL {
+            urls.append(sourceFolderURL)
+        }
+        if let singleSourceURL = project.singleSourceURL {
+            urls.append(singleSourceURL)
+            urls.append(singleSourceURL.deletingLastPathComponent())
+        }
+        if let coverArtURL = project.coverArtURL {
+            urls.append(coverArtURL)
+            urls.append(coverArtURL.deletingLastPathComponent())
+        }
+        if let outputURL = project.outputURL {
+            urls.append(outputURL.deletingLastPathComponent())
+        }
+        if let outputFolderURL = project.settings.outputFolderURL {
+            urls.append(outputFolderURL)
+        }
+        urls.append(contentsOf: project.chapters.map(\.sourceURL))
+        urls.append(contentsOf: project.chapters.map { $0.sourceURL.deletingLastPathComponent() })
+        return Array(Set(urls))
     }
 }
 

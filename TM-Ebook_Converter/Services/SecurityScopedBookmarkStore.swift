@@ -2,6 +2,7 @@ import Foundation
 
 enum SecurityScopedBookmarkStore {
     private static let filename = "SecurityScopedBookmarks.json"
+    private static var activeAccessPaths: Set<String> = []
 
     static func persistAccess(for urls: [URL]) {
         var bookmarks = loadBookmarks()
@@ -19,6 +20,27 @@ enum SecurityScopedBookmarkStore {
     }
 
     @discardableResult
+    static func startAccessing(_ urls: [URL]) -> [String] {
+        urls.compactMap { startAccessing($0) }
+    }
+
+    @discardableResult
+    static func startAccessing(_ url: URL?) -> String? {
+        guard let url else { return nil }
+        let key = key(for: url)
+        if activeAccessPaths.contains(key) {
+            return nil
+        }
+
+        if url.startAccessingSecurityScopedResource() {
+            activeAccessPaths.insert(key)
+            return "Access granted: \(url.path)"
+        }
+
+        return "No security scope granted for \(url.path). If conversion fails, import with the Import Folder button instead of drag/drop."
+    }
+
+    @discardableResult
     static func restoreAccess(to url: URL?) -> Bool {
         guard let url else { return false }
         let bookmarks = loadBookmarks()
@@ -30,7 +52,8 @@ enum SecurityScopedBookmarkStore {
             if isStale {
                 persistAccess(for: [resolved])
             }
-            return resolved.startAccessingSecurityScopedResource()
+            _ = startAccessing(resolved)
+            return true
         } catch {
             return false
         }
