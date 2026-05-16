@@ -173,7 +173,11 @@ actor FFmpegConversionService {
             let ext = sourceURL.pathExtension.isEmpty ? "audio" : sourceURL.pathExtension
             let cleanBase = NameCleaner.fileSystemName(from: sourceURL.deletingPathExtension().lastPathComponent)
             let destination = sourceDir.appendingPathComponent(String(format: "%04d-%@.%@", index, cleanBase, ext))
-            try FileManager.default.copyItem(at: sourceURL, to: destination)
+            do {
+                try FileManager.default.copyItem(at: sourceURL, to: destination)
+            } catch {
+                throw ConversionError.invalidInput("Could not stage audio source \(sourceURL.path): \(error.localizedDescription)")
+            }
             stagedURLsByOriginalPath[key] = destination
             return destination
         }
@@ -190,7 +194,11 @@ actor FFmpegConversionService {
         if let coverArtURL = staged.coverArtURL {
             let ext = coverArtURL.pathExtension.isEmpty ? "image" : coverArtURL.pathExtension
             let coverDestination = sourceDir.appendingPathComponent("cover.\(ext)")
-            try FileManager.default.copyItem(at: coverArtURL, to: coverDestination)
+            do {
+                try FileManager.default.copyItem(at: coverArtURL, to: coverDestination)
+            } catch {
+                throw ConversionError.invalidInput("Could not stage cover art \(coverArtURL.path): \(error.localizedDescription)")
+            }
             staged.coverArtURL = coverDestination
         }
 

@@ -26,12 +26,15 @@ struct AppRootView: View {
     private func handleDrop(_ providers: [NSItemProvider]) async {
         var urls: [URL] = []
         for provider in providers {
-            if let data = try? await provider.loadItem(forTypeIdentifier: "public.file-url") as? Data,
-               let url = URL(dataRepresentation: data, relativeTo: nil) {
+            if let url = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? URL {
+                urls.append(url)
+            } else if let data = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
+                      let url = URL(dataRepresentation: data, relativeTo: nil) {
                 urls.append(url)
             }
         }
         await MainActor.run {
+            SecurityScopedBookmarkStore.persistAccess(for: urls)
             appModel.prepareImportReview(urls)
         }
     }

@@ -19,6 +19,7 @@ final class AppViewModel: ObservableObject {
     private let ffprobe = FFprobeService()
     private let converter = FFmpegConversionService()
     private var queueTask: Task<Void, Never>?
+    private var autosaveTask: Task<Void, Never>?
 
     init() {
         if defaults.outputFolderURL == nil {
@@ -411,12 +412,7 @@ final class AppViewModel: ObservableObject {
         update(&projects[index])
         projects[index].updatedAt = Date()
         recalculateChapterStarts(projectIndex: index)
-        do {
-            try autosaveProjectStatus(projects[index])
-            refreshSavedProjectStatuses()
-        } catch {
-            appendLog("Autosave failed: \(error.localizedDescription)")
-        }
+        scheduleAutosave(for: projects[index])
     }
 
     func moveChapters(from offsets: IndexSet, to destination: Int) {
@@ -718,6 +714,20 @@ final class AppViewModel: ObservableObject {
             refreshSavedProjectStatuses()
         } catch {
             appendLog("Autosave failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func scheduleAutosave(for project: AudiobookProject) {
+        autosaveTask?.cancel()
+        autosaveTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled, let self else { return }
+            do {
+                try self.autosaveProjectStatus(project)
+                self.refreshSavedProjectStatuses()
+            } catch {
+                self.appendLog("Autosave failed: \(error.localizedDescription)")
+            }
         }
     }
 

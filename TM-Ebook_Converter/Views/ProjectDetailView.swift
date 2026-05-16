@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProjectDetailView: View {
     @EnvironmentObject private var appModel: AppViewModel
@@ -907,9 +908,17 @@ struct CoverPreview: View {
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 Task {
                     if let provider = providers.first,
-                       let data = try? await provider.loadItem(forTypeIdentifier: "public.file-url") as? Data,
-                       let url = URL(dataRepresentation: data, relativeTo: nil) {
-                        appModel.updateSelectedProject { $0.coverArtURL = url }
+                       let url = await droppedFileURL(from: provider) {
+                        await MainActor.run {
+                            var isDirectory: ObjCBool = false
+                            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+                                  !isDirectory.boolValue
+                            else {
+                                return
+                            }
+                            SecurityScopedBookmarkStore.persistAccess(for: [url])
+                            appModel.updateSelectedProject { $0.coverArtURL = url }
+                        }
                     }
                 }
                 return true
@@ -917,6 +926,16 @@ struct CoverPreview: View {
 
             Button("Choose Cover") { appModel.setCoverArt() }
         }
+    }
+
+    private func droppedFileURL(from provider: NSItemProvider) async -> URL? {
+        if let url = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? URL {
+            return url
+        }
+        if let data = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data {
+            return URL(dataRepresentation: data, relativeTo: nil)
+        }
+        return nil
     }
 }
 
