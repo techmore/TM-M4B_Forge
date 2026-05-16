@@ -9,6 +9,7 @@ struct ImportReviewView: View {
             Divider()
             actionBar
             Divider()
+            failureBanner
             ScrollView {
                 VStack(spacing: 14) {
                     table
@@ -19,6 +20,25 @@ struct ImportReviewView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var failureBanner: some View {
+        if let failure = appModel.lastFailureDetail {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Last conversion failed", systemImage: "exclamationmark.triangle.fill")
+                    .font(.headline)
+                    .foregroundStyle(.red)
+                Text(failure)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .lineLimit(8)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(.red.opacity(0.08))
+            Divider()
+        }
     }
 
     private var header: some View {

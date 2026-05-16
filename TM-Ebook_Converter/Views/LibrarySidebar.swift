@@ -76,6 +76,14 @@ struct LibrarySidebar: View {
             }
 
             Section("Batch Queue") {
+                if let failure = appModel.lastFailureDetail {
+                    Text(failure)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                        .lineLimit(8)
+                }
+
                 if !appModel.jobs.isEmpty {
                     HStack {
                         Button {

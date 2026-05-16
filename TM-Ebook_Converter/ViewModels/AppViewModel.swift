@@ -15,6 +15,7 @@ final class AppViewModel: ObservableObject {
     @Published var importCandidates: [ImportCandidate] = []
     @Published var autoApproveImports = false
     @Published var isQueueRunning = false
+    @Published var lastFailureDetail: String?
 
     private let ffprobe = FFprobeService()
     private let converter = FFmpegConversionService()
@@ -518,6 +519,7 @@ final class AppViewModel: ObservableObject {
         jobs[index].progress = 0
         jobs[index].estimatedRemaining = nil
         jobs[index].log.removeAll()
+        lastFailureDetail = nil
 
         let project = jobs[index].project
         let jobID = jobs[index].id
@@ -527,6 +529,8 @@ final class AppViewModel: ObservableObject {
         appendLog("Starting \(project.displayTitle): \(project.chapters.count) chapters, \(DurationFormatter.positional(project.timelineDuration)).")
 
         do {
+            let plannedOutput = try await converter.preflight(project: project)
+            appendLog("Preflight passed. Export target: \(plannedOutput.path)")
             let started = Date()
             let output = try await converter.convert(project: project) { [jobID, started] progress, log in
                 Task { @MainActor [weak self] in
@@ -551,8 +555,10 @@ final class AppViewModel: ObservableObject {
         } catch {
             guard let failedIndex = jobs.firstIndex(where: { $0.id == jobID }) else { return }
             jobs[failedIndex].status = .failed
-            let message = "Failed \(jobs[failedIndex].project.displayTitle): \(error.localizedDescription)"
+            let detail = detailedErrorMessage(error)
+            let message = "Failed \(jobs[failedIndex].project.displayTitle): \(detail)"
             jobs[failedIndex].log += message + "\n"
+            lastFailureDetail = message
             appendLog(message)
         }
     }
@@ -811,6 +817,21 @@ final class AppViewModel: ObservableObject {
 
     private func appendLog(_ message: String) {
         logMessages.append("[\(Date().formatted(date: .omitted, time: .standard))] \(message)")
+    }
+
+    private func detailedErrorMessage(_ error: Error) -> String {
+        let nsError = error as NSError
+        var parts = [error.localizedDescription]
+        if !nsError.domain.isEmpty {
+            parts.append("domain=\(nsError.domain)")
+        }
+        if nsError.code != 0 {
+            parts.append("code=\(nsError.code)")
+        }
+        if !nsError.userInfo.isEmpty {
+            parts.append("userInfo=\(nsError.userInfo)")
+        }
+        return parts.joined(separator: " | ")
     }
 
     private func logAccess(_ messages: [String]) {

@@ -23,6 +23,14 @@ enum ConversionError: LocalizedError {
 actor FFmpegConversionService {
     private let runner = ProcessRunner()
 
+    func preflight(project: AudiobookProject) throws -> URL {
+        guard !project.chapters.isEmpty else { throw ConversionError.noChapters }
+        guard FFmpegToolLocator.ffmpegURL() != nil else { throw ConversionError.missingTool("ffmpeg") }
+        let outputURL = try resolvedOutputURL(for: project)
+        try validateInputs(project: project, outputURL: outputURL)
+        return outputURL
+    }
+
     func convert(project: AudiobookProject, progress: @escaping @Sendable (Double, String) -> Void) async throws -> URL {
         guard !project.chapters.isEmpty else { throw ConversionError.noChapters }
         guard let ffmpeg = FFmpegToolLocator.ffmpegURL() else { throw ConversionError.missingTool("ffmpeg") }
