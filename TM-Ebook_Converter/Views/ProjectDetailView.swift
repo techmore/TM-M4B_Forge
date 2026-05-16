@@ -836,7 +836,7 @@ struct CoverAndOutputView: View {
                     Toggle("Create folder per audiobook", isOn: projectFolderBinding)
                     Toggle("Clean output file names", isOn: cleanNamesBinding)
                     Button("Choose Output Folder") { appModel.chooseOutputFolder() }
-                    Text(appModel.selectedProject?.settings.outputFolderURL?.path ?? "Music folder")
+                    Text(appModel.selectedProject?.settings.outputFolderURL?.path ?? "Downloads folder")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

@@ -53,7 +53,7 @@ struct ImportReviewView: View {
                     Label("Export Folder", systemImage: "folder")
                 }
 
-                Text(appModel.defaults.outputFolderURL?.path ?? "Exports to Music by default")
+                Text(appModel.defaults.outputFolderURL?.path ?? "Exports to Downloads by default")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

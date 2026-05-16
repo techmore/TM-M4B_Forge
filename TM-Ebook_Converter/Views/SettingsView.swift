@@ -24,10 +24,11 @@ struct SettingsView: View {
                     panel.canChooseDirectories = true
                     panel.canChooseFiles = false
                     if panel.runModal() == .OK {
+                        SecurityScopedBookmarkStore.persistAccess(for: panel.urls)
                         appModel.defaults.outputFolderURL = panel.url
                     }
                 }
-                Text(appModel.defaults.outputFolderURL?.path ?? "Music folder")
+                Text(appModel.defaults.outputFolderURL?.path ?? "Downloads folder")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

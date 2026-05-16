@@ -19,6 +19,12 @@ final class AppViewModel: ObservableObject {
     private let converter = FFmpegConversionService()
     private var queueTask: Task<Void, Never>?
 
+    init() {
+        if defaults.outputFolderURL == nil {
+            defaults.outputFolderURL = Self.downloadsFolderURL()
+        }
+    }
+
     var selectedProject: AudiobookProject? {
         get { projects.first { $0.id == selectedProjectID } }
         set {
@@ -436,7 +442,16 @@ final class AppViewModel: ObservableObject {
     }
 
     func ensureDefaultOutputFolderSelected() -> Bool {
-        if defaults.outputFolderURL != nil { return true }
+        if let outputFolder = defaults.outputFolderURL {
+            _ = SecurityScopedBookmarkStore.restoreAccess(to: outputFolder)
+            return true
+        }
+
+        if let downloads = Self.downloadsFolderURL() {
+            defaults.outputFolderURL = downloads
+            appendLog("Export folder defaulted to Downloads: \(downloads.path).")
+            return true
+        }
 
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
@@ -454,6 +469,10 @@ final class AppViewModel: ObservableObject {
         defaults.outputFolderURL = url
         appendLog("Export folder set to \(url.path).")
         return true
+    }
+
+    static func downloadsFolderURL() -> URL? {
+        FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
     }
 
     func enqueueSelectedProject() {

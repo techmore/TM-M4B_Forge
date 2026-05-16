@@ -66,7 +66,7 @@ struct AppDefaults: Codable, Hashable {
     var overwriteExisting = false
     var outputIntoProjectFolder = true
     var cleanOutputNames = true
-    var outputFolderURL: URL?
+    var outputFolderURL: URL? = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
 }
 
 struct ConversionJob: Identifiable, Hashable {
