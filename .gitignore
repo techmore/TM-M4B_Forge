@@ -1,0 +1,14 @@
+.DS_Store
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+# Local bundled-tool test copies. Use Scripts/install_ffmpeg_resources.sh locally;
+# release builds should use static/license-reviewed binaries.
+TM-Ebook_Converter/Resources/Tools/ffmpeg
+TM-Ebook_Converter/Resources/Tools/ffprobe
+
+# SwiftPM/Xcode scratch
+.swiftpm/
+Package.resolved
