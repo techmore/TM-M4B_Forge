@@ -33,22 +33,24 @@ actor FFmpegConversionService {
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: workDir) }
 
+        let stagedProject = try stageProject(project, in: workDir)
+        let tempOutputURL = workDir.appendingPathComponent("output.m4b")
         let metadataURL = workDir.appendingPathComponent("chapters.txt")
-        try makeMetadataFile(project: project, at: metadataURL)
+        try makeMetadataFile(project: stagedProject, at: metadataURL)
 
         var arguments = ["-hide_banner", "-nostats", project.settings.overwriteExisting ? "-y" : "-n"]
         let metadataInputIndex: Int
         let coverInputIndex: Int
 
-        switch project.sourceMode {
+        switch stagedProject.sourceMode {
         case .multipleFiles:
             let concatURL = workDir.appendingPathComponent("inputs.ffconcat")
-            try makeConcatFile(project.chapters, at: concatURL)
+            try makeConcatFile(stagedProject.chapters, at: concatURL)
             arguments += ["-f", "concat", "-safe", "0", "-i", concatURL.path]
             metadataInputIndex = 1
             coverInputIndex = 2
         case .singleFile:
-            guard let sourceURL = project.singleSourceURL ?? project.chapters.first?.sourceURL else {
+            guard let sourceURL = stagedProject.singleSourceURL ?? stagedProject.chapters.first?.sourceURL else {
                 throw ConversionError.noChapters
             }
             arguments += ["-i", sourceURL.path]
@@ -57,12 +59,12 @@ actor FFmpegConversionService {
         }
 
         arguments += ["-i", metadataURL.path]
-        if let cover = project.coverArtURL {
+        if let cover = stagedProject.coverArtURL {
             arguments += ["-i", cover.path]
         }
 
         arguments += ["-map_metadata", "\(metadataInputIndex)", "-map_chapters", "\(metadataInputIndex)", "-map", "0:a"]
-        if project.coverArtURL != nil {
+        if stagedProject.coverArtURL != nil {
             arguments += ["-map", "\(coverInputIndex):v", "-disposition:v", "attached_pic"]
         }
 
@@ -72,14 +74,14 @@ actor FFmpegConversionService {
             arguments += ["-c:a", "aac", "-b:a", "\(project.settings.bitrateKbps)k", "-ar", "\(project.settings.sampleRate)"]
         }
 
-        if project.coverArtURL != nil {
+        if stagedProject.coverArtURL != nil {
             arguments += ["-c:v", "copy"]
         }
 
-        arguments += ["-movflags", "+faststart", "-progress", "pipe:1", outputURL.path]
+        arguments += ["-movflags", "+faststart", "-progress", "pipe:1", tempOutputURL.path]
         progress(0.02, "Using ffmpeg: \(ffmpeg.path)")
         progress(0.03, "Output: \(outputURL.path)")
-        progress(0.1, "Prepared FFmpeg inputs: \(project.chapters.count) chapters, cover \(project.coverArtURL == nil ? "none" : "attached")")
+        progress(0.1, "Prepared staged FFmpeg inputs: \(project.chapters.count) chapters, cover \(project.coverArtURL == nil ? "none" : "attached")")
 
         let totalDuration = max(project.timelineDuration, project.duration, 1)
         let parser = LockedFFmpegProgressParser(totalDuration: totalDuration)
@@ -96,6 +98,7 @@ actor FFmpegConversionService {
             throw ConversionError.conversionFailed(output.isEmpty ? "FFmpeg exited with status \(result.terminationStatus) and no output." : output)
         }
 
+        try installOutput(from: tempOutputURL, to: outputURL, overwrite: project.settings.overwriteExisting)
         progress(1.0, result.output)
         return outputURL
     }
@@ -152,6 +155,62 @@ actor FFmpegConversionService {
         guard FileManager.default.isReadableFile(atPath: url.path) else {
             throw ConversionError.invalidInput("\(label) is not readable by M4B Forge: \(url.path)")
         }
+    }
+
+    private func stageProject(_ project: AudiobookProject, in workDir: URL) throws -> AudiobookProject {
+        var staged = project
+        let sourceDir = workDir.appendingPathComponent("sources", isDirectory: true)
+        try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+
+        var stagedURLsByOriginalPath: [String: URL] = [:]
+
+        func stagedURL(for sourceURL: URL, index: Int) throws -> URL {
+            let key = sourceURL.standardizedFileURL.path
+            if let existing = stagedURLsByOriginalPath[key] {
+                return existing
+            }
+
+            let ext = sourceURL.pathExtension.isEmpty ? "audio" : sourceURL.pathExtension
+            let cleanBase = NameCleaner.fileSystemName(from: sourceURL.deletingPathExtension().lastPathComponent)
+            let destination = sourceDir.appendingPathComponent(String(format: "%04d-%@.%@", index, cleanBase, ext))
+            try FileManager.default.copyItem(at: sourceURL, to: destination)
+            stagedURLsByOriginalPath[key] = destination
+            return destination
+        }
+
+        for index in staged.chapters.indices {
+            let copied = try stagedURL(for: staged.chapters[index].sourceURL, index: index)
+            staged.chapters[index].sourceURL = copied
+        }
+
+        if let singleSourceURL = staged.singleSourceURL {
+            staged.singleSourceURL = try stagedURL(for: singleSourceURL, index: 0)
+        }
+
+        if let coverArtURL = staged.coverArtURL {
+            let ext = coverArtURL.pathExtension.isEmpty ? "image" : coverArtURL.pathExtension
+            let coverDestination = sourceDir.appendingPathComponent("cover.\(ext)")
+            try FileManager.default.copyItem(at: coverArtURL, to: coverDestination)
+            staged.coverArtURL = coverDestination
+        }
+
+        return staged
+    }
+
+    private func installOutput(from tempOutputURL: URL, to outputURL: URL, overwrite: Bool) throws {
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: outputURL.path, isDirectory: &isDirectory) {
+            if isDirectory.boolValue {
+                throw ConversionError.invalidInput("Output path is a folder, not a file: \(outputURL.path)")
+            }
+            if overwrite {
+                try FileManager.default.removeItem(at: outputURL)
+            } else {
+                throw ConversionError.invalidInput("Output already exists. Enable overwrite or choose another folder: \(outputURL.path)")
+            }
+        }
+
+        try FileManager.default.copyItem(at: tempOutputURL, to: outputURL)
     }
 
     private func makeConcatFile(_ chapters: [Chapter], at url: URL) throws {

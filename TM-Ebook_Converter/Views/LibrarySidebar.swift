@@ -31,6 +31,50 @@ struct LibrarySidebar: View {
                 }
             }
 
+            Section("Resumable") {
+                if appModel.savedProjectStatuses.isEmpty {
+                    Text("No saved projects yet")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(appModel.savedProjectStatuses) { saved in
+                        Button {
+                            appModel.loadSavedProjectStatus(saved)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(saved.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .lineLimit(1)
+                                    Text("\(saved.chapterCount) chapters • \(DurationFormatter.clock(saved.duration))")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                appModel.deleteSavedProjectStatus(saved)
+                            } label: {
+                                Label("Remove Saved Status", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+
+                Button {
+                    appModel.refreshSavedProjectStatuses()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .font(.caption)
+            }
+
             Section("Batch Queue") {
                 if !appModel.jobs.isEmpty {
                     HStack {

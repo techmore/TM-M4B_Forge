@@ -24,7 +24,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		A05877932FB8007D00CA5D96 /* TM-Ebook_Converter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = "TM-Ebook_Converter.app"; path = "M4B Forge.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A05877932FB8007D00CA5D96 /* M4B Forge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "M4B Forge.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A05877A22FB8007E00CA5D96 /* TM-Ebook_ConverterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "TM-Ebook_ConverterTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A05877AC2FB8007E00CA5D96 /* TM-Ebook_ConverterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "TM-Ebook_ConverterUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -85,7 +85,7 @@
 		A05877942FB8007D00CA5D96 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A05877932FB8007D00CA5D96 /* TM-Ebook_Converter.app */,
+				A05877932FB8007D00CA5D96 /* M4B Forge.app */,
 				A05877A22FB8007E00CA5D96 /* TM-Ebook_ConverterTests.xctest */,
 				A05877AC2FB8007E00CA5D96 /* TM-Ebook_ConverterUITests.xctest */,
 			);
@@ -114,7 +114,7 @@
 			packageProductDependencies = (
 			);
 			productName = "TM-Ebook_Converter";
-			productReference = A05877932FB8007D00CA5D96 /* TM-Ebook_Converter.app */;
+			productReference = A05877932FB8007D00CA5D96 /* M4B Forge.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A05877A12FB8007E00CA5D96 /* TM-Ebook_ConverterTests */ = {
@@ -404,6 +404,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -437,6 +438,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

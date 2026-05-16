@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 final class AppViewModel: ObservableObject {
     @Published var projects: [AudiobookProject] = []
     @Published var selectedProjectID: AudiobookProject.ID?
+    @Published var savedProjectStatuses: [SavedProjectStatus] = []
     @Published var jobs: [ConversionJob] = []
     @Published var defaults = AppDefaults()
     @Published var logMessages: [String] = []
@@ -23,6 +24,7 @@ final class AppViewModel: ObservableObject {
         if defaults.outputFolderURL == nil {
             defaults.outputFolderURL = Self.downloadsFolderURL()
         }
+        refreshSavedProjectStatuses()
     }
 
     var selectedProject: AudiobookProject? {
@@ -244,6 +246,7 @@ final class AppViewModel: ObservableObject {
 
         projects.append(project)
         selectedProjectID = project.id
+        autosaveCurrentProjectAfterImport()
         appendLog("Imported \(chapters.count) chapter files.")
     }
 
@@ -308,6 +311,7 @@ final class AppViewModel: ObservableObject {
 
         projects.append(project)
         selectedProjectID = project.id
+        autosaveCurrentProjectAfterImport()
         appendLog("Imported \(chapters.count) chapter files for \(project.displayTitle).")
     }
 
@@ -337,6 +341,7 @@ final class AppViewModel: ObservableObject {
 
         projects.append(project)
         selectedProjectID = project.id
+        autosaveCurrentProjectAfterImport()
         appendLog("Imported single file for chaptering: \(url.lastPathComponent).")
     }
 
@@ -406,6 +411,12 @@ final class AppViewModel: ObservableObject {
         update(&projects[index])
         projects[index].updatedAt = Date()
         recalculateChapterStarts(projectIndex: index)
+        do {
+            try autosaveProjectStatus(projects[index])
+            refreshSavedProjectStatuses()
+        } catch {
+            appendLog("Autosave failed: \(error.localizedDescription)")
+        }
     }
 
     func moveChapters(from offsets: IndexSet, to destination: Int) {
@@ -585,14 +596,55 @@ final class AppViewModel: ObservableObject {
     func saveProjectStatus() {
         guard let project = selectedProject else { return }
         do {
-            SecurityScopedBookmarkStore.persistAccess(for: project)
+            let url = try autosaveProjectStatus(project)
+            refreshSavedProjectStatuses()
+            appendLog("Saved project status to \(url.path).")
+        } catch {
+            appendLog(error.localizedDescription)
+        }
+    }
+
+    func refreshSavedProjectStatuses() {
+        do {
             let folder = autosaveFolderURL()
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            let filename = NameCleaner.fileSystemName(from: project.displayTitle) + ".m4bforge"
-            let url = folder.appendingPathComponent(filename)
-            let data = try JSONEncoder.pretty.encode(project)
-            try data.write(to: url, options: .atomic)
-            appendLog("Saved project status to \(url.path).")
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: folder,
+                includingPropertiesForKeys: [.contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            )
+
+            savedProjectStatuses = urls
+                .filter { $0.pathExtension.lowercased() == "m4bforge" }
+                .compactMap { url in
+                    guard let data = try? Data(contentsOf: url),
+                          let project = try? JSONDecoder().decode(AudiobookProject.self, from: data)
+                    else { return nil }
+
+                    let resourceValues = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+                    return SavedProjectStatus(
+                        url: url,
+                        title: project.displayTitle,
+                        updatedAt: resourceValues?.contentModificationDate ?? project.updatedAt,
+                        chapterCount: project.chapters.count,
+                        duration: project.timelineDuration
+                    )
+                }
+                .sorted { $0.updatedAt > $1.updatedAt }
+        } catch {
+            appendLog("Could not refresh saved project status: \(error.localizedDescription)")
+        }
+    }
+
+    func loadSavedProjectStatus(_ saved: SavedProjectStatus) {
+        loadProject(from: saved.url)
+    }
+
+    func deleteSavedProjectStatus(_ saved: SavedProjectStatus) {
+        do {
+            try FileManager.default.removeItem(at: saved.url)
+            refreshSavedProjectStatuses()
+            appendLog("Removed saved project status for \(saved.title).")
         } catch {
             appendLog(error.localizedDescription)
         }
@@ -645,6 +697,28 @@ final class AppViewModel: ObservableObject {
         return base
             .appendingPathComponent("M4B Forge", isDirectory: true)
             .appendingPathComponent("Saved Project Status", isDirectory: true)
+    }
+
+    @discardableResult
+    private func autosaveProjectStatus(_ project: AudiobookProject) throws -> URL {
+        SecurityScopedBookmarkStore.persistAccess(for: project)
+        let folder = autosaveFolderURL()
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let filename = NameCleaner.fileSystemName(from: project.displayTitle) + ".m4bforge"
+        let url = folder.appendingPathComponent(filename)
+        let data = try JSONEncoder.pretty.encode(project)
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
+    private func autosaveCurrentProjectAfterImport() {
+        guard let project = selectedProject else { return }
+        do {
+            try autosaveProjectStatus(project)
+            refreshSavedProjectStatuses()
+        } catch {
+            appendLog("Autosave failed: \(error.localizedDescription)")
+        }
     }
 
     private func recalculateChapterStarts(projectIndex: Int) {
