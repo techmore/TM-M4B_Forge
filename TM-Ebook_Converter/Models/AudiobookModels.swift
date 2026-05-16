@@ -137,4 +137,24 @@ struct BookMetadataDraft: Codable, Hashable {
     var copyright = ""
     var series = ""
     var seriesNumber = ""
+
+    nonisolated init(
+        description: String = "",
+        genre: String = "Audiobook",
+        publisher: String = "",
+        isbn: String = "",
+        language: String = "",
+        copyright: String = "",
+        series: String = "",
+        seriesNumber: String = ""
+    ) {
+        self.description = description
+        self.genre = genre
+        self.publisher = publisher
+        self.isbn = isbn
+        self.language = language
+        self.copyright = copyright
+        self.series = series
+        self.seriesNumber = seriesNumber
+    }
 }

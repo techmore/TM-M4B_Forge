@@ -95,10 +95,18 @@ enum ImportScanner {
         let sorted = FilenameOrdering.sortedAudioFiles(from: audioFiles)
         let bytes = sorted.map(fileSize).reduce(0, +)
         let cover = findCoverArt(near: root)
+        let chapterDrafts = findChapterFile(near: root).flatMap { try? ChapterFileParser.parse(url: $0) } ?? []
+        let description = readDescription(near: root)
         var warnings = sizeWarnings(bytes: bytes, truncated: false, limits: limits)
         if sorted.count == 1 {
             warnings.append("Detected as a single long audio file")
         }
+        if !chapterDrafts.isEmpty {
+            warnings.append("Loaded \(chapterDrafts.count) chapter markers from sidecar file")
+        }
+
+        var metadataDraft = BookMetadataDraft()
+        metadataDraft.description = description
 
         return ImportCandidate(
             kind: sorted.count == 1 ? .singleAudioFile : .audiobookFolder,
@@ -108,7 +116,9 @@ enum ImportScanner {
             coverArtURL: cover,
             totalBytes: bytes,
             status: warnings.isEmpty ? .pending : .warning,
-            warnings: warnings
+            warnings: warnings,
+            chapterDrafts: chapterDrafts,
+            metadataDraft: metadataDraft
         )
     }
 
@@ -156,9 +166,30 @@ enum ImportScanner {
     private nonisolated static func findCoverArt(near root: URL) -> URL? {
         let contents = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
         return contents.first { url in
-            FilenameOrdering.supportedImageExtensions.contains(url.pathExtension.lowercased()) &&
-            ["cover", "folder", "front", "artwork"].contains(url.deletingPathExtension().lastPathComponent.lowercased())
+            let name = url.deletingPathExtension().lastPathComponent.lowercased()
+            return FilenameOrdering.supportedImageExtensions.contains(url.pathExtension.lowercased()) &&
+            ["cover", "folder", "front", "artwork"].contains { name.contains($0) }
         }
+    }
+
+    private nonisolated static func findChapterFile(near root: URL) -> URL? {
+        let contents = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        let chapterFiles = contents.filter { url in
+            let ext = url.pathExtension.lowercased()
+            let name = url.deletingPathExtension().lastPathComponent.lowercased()
+            return ["json", "csv", "tsv"].contains(ext) && (name.contains("chapter") || name.contains("chapters"))
+        }
+        return chapterFiles.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }.first
+    }
+
+    private nonisolated static func readDescription(near root: URL) -> String {
+        let contents = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        guard let url = contents.first(where: { $0.lastPathComponent.lowercased() == "description.txt" }),
+              let text = try? String(contentsOf: url, encoding: .utf8)
+        else {
+            return ""
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private nonisolated static func fileSize(_ url: URL) -> Int64 {

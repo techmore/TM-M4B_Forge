@@ -68,9 +68,13 @@ actor FFmpegConversionService {
             arguments += ["-map", "\(coverInputIndex):v", "-disposition:v", "attached_pic"]
         }
 
-        if project.settings.allowStreamCopy {
+        let shouldStreamCopyAudio = project.settings.allowStreamCopy && canStreamCopyAudio(project: project)
+        if shouldStreamCopyAudio {
             arguments += ["-c:a", "copy"]
         } else {
+            if project.settings.allowStreamCopy {
+                progress(0.08, "Stream copy is not available for this source/container pair; encoding AAC instead.")
+            }
             arguments += ["-c:a", "aac", "-b:a", "\(project.settings.bitrateKbps)k", "-ar", "\(project.settings.sampleRate)"]
         }
 
@@ -219,6 +223,18 @@ actor FFmpegConversionService {
         }
 
         try FileManager.default.copyItem(at: tempOutputURL, to: outputURL)
+    }
+
+    private func canStreamCopyAudio(project: AudiobookProject) -> Bool {
+        let urls: [URL]
+        if project.sourceMode == .singleFile, let singleSourceURL = project.singleSourceURL {
+            urls = [singleSourceURL]
+        } else {
+            urls = project.chapters.map(\.sourceURL)
+        }
+
+        let supportedExtensions = Set(["aac", "m4a", "m4b", "mp4"])
+        return !urls.isEmpty && urls.allSatisfy { supportedExtensions.contains($0.pathExtension.lowercased()) }
     }
 
     private func makeConcatFile(_ chapters: [Chapter], at url: URL) throws {

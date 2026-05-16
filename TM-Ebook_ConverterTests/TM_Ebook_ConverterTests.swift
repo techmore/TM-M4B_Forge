@@ -66,6 +66,29 @@ struct TM_Ebook_ConverterTests {
         #expect(candidates.first?.audioFiles.map(\.lastPathComponent) == ["01-Intro.mp3", "02-Chapter.mp3"])
     }
 
+    @MainActor @Test func importScannerLoadsBookSidecars() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let audio = root.appendingPathComponent("Book.mp3")
+        let cover = root.appendingPathComponent("Book_cover_art.jpg")
+        let chapters = root.appendingPathComponent("book.chapters.json")
+        let description = root.appendingPathComponent("description.txt")
+        FileManager.default.createFile(atPath: audio.path, contents: Data())
+        FileManager.default.createFile(atPath: cover.path, contents: Data())
+        try #"{"chapters":[{"title":"Prologue","start":0},{"title":"Chapter 1","start":60}]}"#
+            .write(to: chapters, atomically: true, encoding: .utf8)
+        try "A useful book description.".write(to: description, atomically: true, encoding: .utf8)
+
+        let candidate = try #require(ImportScanner.candidates(from: [root]).first)
+
+        #expect(candidate.kind == .singleAudioFile)
+        #expect(candidate.coverArtURL?.lastPathComponent == "Book_cover_art.jpg")
+        #expect(candidate.chapterDrafts.map(\.title) == ["Prologue", "Chapter 1"])
+        #expect(candidate.metadataDraft.description == "A useful book description.")
+    }
+
     @Test func nameCleanerRemovesCommonNoise() async throws {
         #expect(NameCleaner.title(from: "01_The.Book.Title_[Retail]_MP3") == "The Book Title")
         #expect(NameCleaner.fileSystemName(from: #"A/B: C? <D>"#) == "A-B- C- -D-")
@@ -130,6 +153,48 @@ struct TM_Ebook_ConverterTests {
         #expect(FileManager.default.fileExists(atPath: output.path))
         let size = try FileManager.default.attributesOfItem(atPath: output.path)[.size] as? NSNumber
         #expect((size?.intValue ?? 0) > 0)
+    }
+
+    @MainActor @Test func largeFixtureConvertsWhenEnabled() async throws {
+        let enableFixtureURL = URL(fileURLWithPath: "/Users/techmore/projects/tm-ebook-converter/.run-large-fixture")
+        guard FileManager.default.fileExists(atPath: enableFixtureURL.path) else { return }
+
+        let fixture = URL(fileURLWithPath: "/Users/techmore/projects/tm-ebook-converter/Test-ebook", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: fixture.path) else { return }
+
+        let candidate = try #require(ImportScanner.candidates(from: [fixture]).first)
+        let sourceURL = try #require(candidate.audioFiles.first)
+        let duration = try await FFprobeService().duration(for: sourceURL)
+        let chapters = ChapterPlanner.rebuildSingleFileDurations(
+            candidate.chapterDrafts.map {
+                Chapter(title: $0.title, sourceURL: sourceURL, duration: 0, startTime: $0.startTime, manualStartTime: $0.startTime)
+            },
+            totalDuration: duration
+        )
+
+        let outputRoot = FileManager.default.temporaryDirectory.appendingPathComponent("M4BForge-Fixture-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: outputRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: outputRoot) }
+
+        var project = AudiobookProject(
+            sourceMode: .singleFile,
+            title: candidate.title,
+            chapters: chapters,
+            coverArtURL: candidate.coverArtURL,
+            sourceFolderURL: fixture,
+            singleSourceURL: sourceURL,
+            sourceDuration: duration
+        )
+        project.description = candidate.metadataDraft.description
+        project.settings.outputFolderURL = outputRoot
+        project.settings.outputIntoProjectFolder = false
+        project.settings.overwriteExisting = true
+        project.settings.allowStreamCopy = true
+
+        let output = try await FFmpegConversionService().convert(project: project) { _, _ in }
+
+        #expect(FileManager.default.fileExists(atPath: output.path))
+        #expect((try FileManager.default.attributesOfItem(atPath: output.path)[.size] as? NSNumber)?.int64Value ?? 0 > 1_000_000)
     }
 
     private func run(_ executableURL: URL, _ arguments: [String]) throws {
