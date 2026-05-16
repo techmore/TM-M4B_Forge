@@ -56,6 +56,22 @@ Apple Silicon is strongly recommended for `mlx_whisper`.
 
 ## Full Workflow
 
+### Best Path When You Have a PDF or Ebook
+
+When a reference PDF has the real chapter layout, use it as the source of truth. This avoids turning every dated diary entry or scene break into a chapter.
+
+```bash
+python3 ChapterPipeline/pdf_chapter_plan.py "/path/to/book.pdf" book.json \
+  --output-stem book_pdf_guided \
+  --opening-title Prologue
+```
+
+This extracts `Chapter 1`, `Chapter II`, `Chapter III`, and similar headings from the PDF, aligns each chapter start to the Whisper transcript, then adds the opening bookend and any detected epilogue marker.
+
+Import `book_pdf_guided.chapters.json` into M4B Forge.
+
+### Transcript-Only Path
+
 1. Transcribe the audiobook:
 
 ```bash
@@ -153,4 +169,3 @@ Every chunk writes files under `chapter_work/`:
 Re-run without `--overwrite` to resume from checkpoints. Add `--overwrite` to reprocess all chunks.
 
 Use `--max-chunks 2 --dry-run` to inspect prompts without calling Ollama.
-

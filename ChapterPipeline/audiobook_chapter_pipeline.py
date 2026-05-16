@@ -308,9 +308,9 @@ def heuristic_chapters(segments: list[Segment], mode: str) -> list[dict[str, Any
 
 
 def write_outputs(output_stem: Path, chapters: list[dict[str, Any]], total_duration: float) -> None:
-    json_path = output_stem.with_suffix(".chapters.json")
-    csv_path = output_stem.with_suffix(".chapters.csv")
-    txt_path = output_stem.with_suffix(".chapters.txt")
+    json_path = Path(f"{output_stem}.chapters.json")
+    csv_path = Path(f"{output_stem}.chapters.csv")
+    txt_path = Path(f"{output_stem}.chapters.txt")
 
     with json_path.open("w", encoding="utf-8") as handle:
         json.dump(
