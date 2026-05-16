@@ -46,6 +46,7 @@ struct ImportReviewView: View {
                     panel.canChooseDirectories = true
                     panel.canChooseFiles = false
                     if panel.runModal() == .OK {
+                        SecurityScopedBookmarkStore.persistAccess(for: panel.urls)
                         appModel.defaults.outputFolderURL = panel.url
                     }
                 } label: {
@@ -198,8 +199,10 @@ struct ImportReviewView: View {
 
             Button {
                 Task {
-                    await appModel.approveSelectedImportCandidates(addToQueue: true)
-                    await appModel.runQueue()
+                    if appModel.ensureDefaultOutputFolderSelected() {
+                        await appModel.approveSelectedImportCandidates(addToQueue: true)
+                        await appModel.runQueue()
+                    }
                 }
             } label: {
                 Label("Approve + Queue", systemImage: "play.circle.fill")

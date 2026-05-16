@@ -25,7 +25,7 @@ actor FFmpegConversionService {
         guard !project.chapters.isEmpty else { throw ConversionError.noChapters }
         guard let ffmpeg = FFmpegToolLocator.ffmpegURL() else { throw ConversionError.missingTool("ffmpeg") }
 
-        let outputURL = resolvedOutputURL(for: project)
+        let outputURL = try resolvedOutputURL(for: project)
         let workDir = FileManager.default.temporaryDirectory.appendingPathComponent("M4BForge-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: workDir) }
@@ -74,7 +74,9 @@ actor FFmpegConversionService {
         }
 
         arguments += ["-movflags", "+faststart", "-progress", "pipe:1", outputURL.path]
-        progress(0.1, "Prepared FFmpeg inputs")
+        progress(0.02, "Using ffmpeg: \(ffmpeg.path)")
+        progress(0.03, "Output: \(outputURL.path)")
+        progress(0.1, "Prepared FFmpeg inputs: \(project.chapters.count) chapters, cover \(project.coverArtURL == nil ? "none" : "attached")")
 
         let totalDuration = max(project.timelineDuration, project.duration, 1)
         let parser = LockedFFmpegProgressParser(totalDuration: totalDuration)
@@ -87,19 +89,22 @@ actor FFmpegConversionService {
             if Task.isCancelled {
                 throw CancellationError()
             }
-            throw ConversionError.conversionFailed(result.output)
+            let output = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw ConversionError.conversionFailed(output.isEmpty ? "FFmpeg exited with status \(result.terminationStatus) and no output." : output)
         }
 
         progress(1.0, result.output)
         return outputURL
     }
 
-    private func resolvedOutputURL(for project: AudiobookProject) -> URL {
+    private func resolvedOutputURL(for project: AudiobookProject) throws -> URL {
         if let outputURL = project.outputURL { return outputURL }
-        let baseFolder = project.settings.outputFolderURL ?? FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).first ?? FileManager.default.homeDirectoryForCurrentUser
+        guard let baseFolder = project.settings.outputFolderURL else {
+            throw ConversionError.outputNotSet
+        }
         let cleanTitle = project.settings.cleanOutputNames ? NameCleaner.fileSystemName(from: project.displayTitle) : project.displayTitle.replacingOccurrences(of: "/", with: "-")
         let folder = project.settings.outputIntoProjectFolder ? baseFolder.appendingPathComponent(cleanTitle, isDirectory: true) : baseFolder
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let fileName = cleanTitle + ".m4b"
         return folder.appendingPathComponent(fileName)
     }

@@ -435,6 +435,27 @@ final class AppViewModel: ObservableObject {
         }
     }
 
+    func ensureDefaultOutputFolderSelected() -> Bool {
+        if defaults.outputFolderURL != nil { return true }
+
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Use for Exports"
+        panel.message = "Choose where M4B Forge should write completed audiobooks."
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            appendLog("Conversion canceled: choose an export folder before queueing.")
+            return false
+        }
+
+        SecurityScopedBookmarkStore.persistAccess(for: [url])
+        defaults.outputFolderURL = url
+        appendLog("Export folder set to \(url.path).")
+        return true
+    }
+
     func enqueueSelectedProject() {
         guard let project = selectedProject else { return }
         if jobs.contains(where: { $0.project.id == project.id && ($0.status == .queued || $0.status == .running) }) {
@@ -464,6 +485,9 @@ final class AppViewModel: ObservableObject {
 
         let project = jobs[index].project
         let jobID = jobs[index].id
+        SecurityScopedBookmarkStore.persistAccess(for: project)
+        SecurityScopedBookmarkStore.restoreAccess(for: project)
+        appendLog("Starting \(project.displayTitle): \(project.chapters.count) chapters, \(DurationFormatter.positional(project.timelineDuration)).")
 
         do {
             let started = Date()
@@ -490,8 +514,9 @@ final class AppViewModel: ObservableObject {
         } catch {
             guard let failedIndex = jobs.firstIndex(where: { $0.id == jobID }) else { return }
             jobs[failedIndex].status = .failed
-            jobs[failedIndex].log += error.localizedDescription
-            appendLog(error.localizedDescription)
+            let message = "Failed \(jobs[failedIndex].project.displayTitle): \(error.localizedDescription)"
+            jobs[failedIndex].log += message + "\n"
+            appendLog(message)
         }
     }
 
